@@ -1,8 +1,19 @@
 {
-  "name": "root",
+  "name": "@ngsocial/ngsocial",
   "private": true,
+  "scripts": {
+    "codegen": "npx graphql-codegen --watch"
+  },
   "devDependencies": {
     "lerna": "^5.1.8"
   },
-  "version": "0.0.1"
+  "version": "0.0.1",
+  "workspaces": [
+    "./packages/*"
+  ],
+  "dependencies": {
+    "@graphql-codegen/cli": "^2.9.1",
+    "@graphql-codegen/typescript": "^2.7.2",
+    "@graphql-codegen/typescript-resolvers": "^2.7.2"
+  }
 }

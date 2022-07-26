@@ -90,3 +90,8 @@ type AuthPayload {
   token: String!
   user: User!
 }
+
+type Subscription {
+  onPostCommented: Comment
+  onPostLiked: Like
+}

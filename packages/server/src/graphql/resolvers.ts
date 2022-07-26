@@ -1,6 +1,7 @@
 import { Context } from '..';
 import { Resolvers, User, Post, Comment, Like, Notification } from '@ngsocial/graphql';
 import { GraphQLUpload } from 'graphql-upload';
+import { PubSub } from 'graphql-subscriptions';
 import { ApolloError } from 'apollo-server-errors';
 import { Post as PostEntity, Comment as CommentEntity, Like as LikeEntity } from '../entity';
 import { DeleteResult, QueryFailedError, UpdateResult } from 'typeorm';
@@ -10,6 +11,8 @@ import dotenv from 'dotenv';
 import AWS from 'aws-sdk';
 
 dotenv.config();
+
+const pubsub = new PubSub();
 
 const spacesEndpoint = new AWS.Endpoint(process.env.S3_ENDPOINT as string);
 const s3 = new AWS.S3({
@@ -218,6 +221,7 @@ const resolvers: Resolvers = {
         latestComment: savedComment
       });
       savedComment.post = await orm.postRepository.findOne(args.postId) as PostEntity;
+      pubsub.publish('ON_POST_COMMENTED', { onPostCommented: savedComment });
       return savedComment as unknown as Comment;
     },
     like: async (_, args, { orm, authUser }: Context) => {
@@ -230,6 +234,7 @@ const resolvers: Resolvers = {
         likesCount: savedLike.post.likesCount + 1
       });
       savedLike.post = await orm.postRepository.findOne(args.postId) as PostEntity;
+      pubsub.publish('ON_POST_LIKED', { onPostLiked: savedLike });
       return savedLike as unknown as Like;
     },
     removeLike: async (_, args, { orm, authUser }: Context) => {
@@ -388,6 +393,14 @@ const resolvers: Resolvers = {
         throw new ApolloError("User bio update failed", "USER_BIO_UPDATE_FAILED");
       }
       return await orm.userRepository.findOne(authUser?.id) as unknown as User;
+    }
+  },
+  Subscription: {
+    onPostCommented: {
+      subscribe: () => pubsub.asyncIterator(['ON_POST_COMMENTED']) as any
+    },
+    onPostLiked: {
+      subscribe: () => pubsub.asyncIterator(['ON_POST_LIKED']) as any
     }
   }
 };

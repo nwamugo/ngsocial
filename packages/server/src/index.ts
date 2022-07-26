@@ -4,61 +4,24 @@ import cors from 'cors';
 import { createConnection, Connection, Repository, getRepository } from 'typeorm';
 import { User, Post, Comment, Like, Notification } from './entity';
 import schema from './graphql/schema';
+import { graphqlUploadExpress } from 'graphql-upload';
+import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
 import 'reflect-metadata';
-// import casual = require("casual");
 
+dotenv.config();
+const { JWT_SECRET } = process.env;
 
-// let postsIds: string[] = [];
-// let usersIds: string[] = [];
-
-// const mocks = {
-//   User: () => ({
-//     id: () => { let uuid = casual.uuid; usersIds.push(uuid); return uuid },
-//     fullName: casual.full_name,
-//     bio: casual.text,
-//     email: casual.email,
-//     username: casual.username,
-//     password: casual.password,
-//     image: 'https://picsum.photos/seed/picsum/200/300',
-//     coverImage: 'https://picsum.photos/seed/picsum/200/300',
-//     postsCount: () => casual.integer(0)
-//   }),
-//   Post: () => ({
-//     id: () => { let uuid = casual.uuid; postsIds.push(uuid); return uuid },
-//     text: casual.text,
-//     image: 'https://picsum.photos/seed/picsum/200/300',
-//     author: casual.random_element(usersIds),
-//     commentsCount: () => casual.integer(0),
-//     likesCount: () => casual.integer(0),
-//     latestLike: casual.first_name,
-//     createdAt: () => casual.date()
-//   }),
-//   Comment: () => ({
-//     id: casual.uuid,
-//     comment: casual.text,
-//     post: casual.random_element(postsIds),
-//     author: casual.random_element(usersIds),
-//     createdAt: () => casual.date()
-//   }),
-//   Like: () => ({
-//     id: casual.uuid,
-//     post: casual.random_element(postsIds),
-//     user: casual.random_element(usersIds)
-//   }),
-//   /**
-//    * Our mock resolvers return only two results for queries.
-//    * We can change this default behavior as follows.
-//    * Below, our queries will return between 10 and 100 fake entries
-//    */
-//   Query: () => ({
-//     getPostsByUserId: () => [...new Array(casual.integer(10, 100))],
-//     getFeed: () => [...new Array(casual.integer(10, 100))],
-//     getNotificationsByUserId: () => [...new Array(casual.integer(10, 100))],
-//     getCommentsByPostId: () => [...new Array(casual.integer(10, 100))],
-//     getLikesByPostId: () => [...new Array(casual.integer(10, 100))],
-//     searchUsers: () => [...new Array(casual.integer(10, 100))]
-//   })
-// };
+const getAuthUser = (token: string) => {
+  try {
+    if (token) {
+      return jwt.verify(token, JWT_SECRET as string) as User;
+    }
+    return null;
+  } catch (error) {
+    return null;
+  }
+}
 
 export type Context = {
   orm: {
@@ -68,6 +31,7 @@ export type Context = {
     likeRepository: Repository<Like>;
     notificationRepository: Repository<Notification>;
   };
+  authUser: User | null;
 };
 
 const connection: Promise<Connection> = createConnection();
@@ -79,22 +43,28 @@ async function startApolloServer() {
   const PORT = 8081;
   const app: Application = express();
   app.use(cors());
+  app.use(graphqlUploadExpress());
   const userRepository: Repository<User> = getRepository(User);
   const postRepository: Repository<Post> = getRepository(Post);
   const commentRepository: Repository<Comment> = getRepository(Comment);
   const likeRepository: Repository<Like> = getRepository(Like);
   const notificationRepository: Repository<Notification> = getRepository(Notification);
-  const context: Context = {
-    orm: {
-      userRepository: userRepository,
-      postRepository: postRepository,
-      commentRepository: commentRepository,
-      likeRepository: likeRepository,
-      notificationRepository: notificationRepository
-    }
-  }
-  // const server: ApolloServer = new ApolloServer({schema, mocks: true, mockEntireSchema: false});
-  const server: ApolloServer = new ApolloServer({ schema, context });
+
+  const server: ApolloServer = new ApolloServer({ schema, context: ({req}) => {
+    const token = req.get('Authorization') || '';
+    const authUser = getAuthUser(token.split(' ')[1]);
+    const ctx: Context = {
+      orm: {
+        userRepository: userRepository,
+        postRepository: postRepository,
+        commentRepository: commentRepository,
+        likeRepository: likeRepository,
+        notificationRepository:notificationRepository
+      },
+      authUser: authUser
+    };
+    return ctx;
+  } });
 
   await server.start();
   server.applyMiddleware({
@@ -106,4 +76,3 @@ async function startApolloServer() {
     console.log(`Server is running at http://localhost:${PORT}`);
   })
 }
-// startApolloServer();
